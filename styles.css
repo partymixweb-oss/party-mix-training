@@ -78,3 +78,5 @@ input[type=text],input[type=password],input[type=tel],select,textarea{width:100%
 .crumbs{font-size:.9rem;margin-bottom:4px}
 .pill{font-size:.72rem;background:var(--pm-blue-soft);color:var(--pm-blue-dark);padding:2px 8px;border-radius:999px;font-weight:700}
 @media print{body{background:#fff}.topbar,.foot,.banner,.noprint{display:none!important}.cert{border-width:8px}}
+
+.due{font-size:.8rem;font-weight:700;color:var(--pm-blue-dark);margin-top:6px}.due.over{color:#c0392b}
