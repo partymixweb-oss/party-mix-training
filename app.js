@@ -20,7 +20,9 @@
   /* ---------- state ---------- */
   var session = lsGet("pm_session");       // {name, pin}
   var progress = null;
-  var quizState = null;
+  var quizState = null, storyState = null, sceneState = null, sceneTimer = null, gameState = null, postRender = null, actx = null;
+  var soundOn = (function () { try { return localStorage.getItem("pm_sound") !== "0"; } catch (e) { return true; } })();
+  var reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   var practiceState = {};
   var syncTimer = null, pendingAttempts = [], syncStatus = "saved";
 
@@ -193,14 +195,14 @@
       session = { name: r.name || name, pin: pin };
       lsSet("pm_session", session);
       progress = r.progress || lsGet("pm_progress_" + keyOf(session.name)) || blankProgress();
-      ["read", "quiz", "skills", "practice", "viewed"].forEach(function (k) { if (!progress[k]) progress[k] = {}; });
+      ["read", "quiz", "skills", "practice", "viewed", "games"].forEach(function (k) { if (!progress[k]) progress[k] = {}; });
       lsSet("pm_progress_" + keyOf(session.name), progress);
       assignments = r.assignments || lsGet("pm_asg_" + keyOf(session.name)) || [];
       lsSet("pm_asg_" + keyOf(session.name), assignments); asgLoaded = true;
       renderTop(); location.hash = "#/"; route();
     }).catch(function () { err.textContent = "Can't reach the server. Check your internet and try again."; });
   }
-  function logout() { if (session && syncStatus !== "saved") { clearTimeout(syncTimer); flush(); } session = null; progress = null; assignments = []; asgLoaded = false; localStorage.removeItem("pm_session"); renderTop(); renderLogin(); location.hash = "#/"; }
+  function logout() { storyState = null; clearTimeout(sceneTimer); sceneState = null; gameStop(); gameState = null; if (session && syncStatus !== "saved") { clearTimeout(syncTimer); flush(); } session = null; progress = null; assignments = []; asgLoaded = false; localStorage.removeItem("pm_session"); renderTop(); renderLogin(); location.hash = "#/"; }
 
   function statusOf(m) {
     if (modDone(m)) return '<span class="status done">✓ Complete</span>';
@@ -265,40 +267,355 @@
     var done = modDone(m), od = a.due && !done && a.due < todayStr();
     return ' <span class="status' + (od ? "" : " prog") + '"' + (od ? ' style="background:#fdecea;color:#c0392b"' : "") + ">📌 Assigned" + (a.due ? " · " + (od ? "overdue, was due " : "due ") + fmtDue(a.due) : "") + "</span>";
   }
-  function renderModule(id, tab, openLesson) {
+  function renderModule(id, tab, openLesson, keepScroll) {
     var m = modById(id);
     if (!m) { location.hash = "#/"; return; }
     markViewed(id);
     tab = tab || "learn";
     var tabs = [["learn", "📖 Learn"], ["skills", "✅ Skills"]];
     if (m.practice) tabs.push(["practice", "📝 Practice"]);
+    tabs.push(["play", "🎮 Play"]);
     tabs.push(["quiz", "🧠 Quiz"]);
     var h = '<div class="crumbs"><a href="#/">← All modules</a></div><h1>' + m.icon + " " + esc(m.title) + "</h1>" + statusOf(m) + dueBanner(m) +
       '<div class="tabs">' + tabs.map(function (t) { return '<button class="tab' + (t[0] === tab ? " on" : "") + '" data-act="tab" data-id="' + m.id + '" data-tab="' + t[0] + '">' + t[1] + "</button>"; }).join("") + "</div>";
     if (tab === "learn") h += viewLearn(m, openLesson);
     else if (tab === "skills") h += viewSkills(m);
     else if (tab === "practice") h += viewPractice(m);
+    else if (tab === "play") h += viewPlay(m);
     else h += viewQuiz(m);
     app.innerHTML = h;
-    window.scrollTo(0, 0);
+    if (!keepScroll) window.scrollTo(0, 0);
+    var pr = postRender; postRender = null; if (pr) setTimeout(pr, 40);
   }
 
+  /* ---- fun helpers: confetti + sounds ---- */
+  function confetti(n, big) {
+    if (reducedMotion) return;
+    var box = document.createElement("div"); box.className = "confetti";
+    var cols = ["#1e6fd9", "#ff5fa2", "#ffc93c", "#2ecc8f", "#9b6bff", "#ff8a3d"];
+    for (var i = 0; i < n; i++) {
+      var p = document.createElement("i"), ang = Math.random() * Math.PI * 2, d = (big ? 160 : 90) + Math.random() * (big ? 260 : 120);
+      p.style.cssText = "--dx:" + Math.round(Math.cos(ang) * d) + "px;--dy:" + Math.round(Math.sin(ang) * d - 140) + "px;--r:" + Math.round(Math.random() * 720 - 360) + "deg;background:" + cols[i % cols.length] + ";animation-delay:" + (Math.random() * 0.12).toFixed(2) + "s";
+      box.appendChild(p);
+    }
+    document.body.appendChild(box); setTimeout(function () { if (box.parentNode) box.parentNode.removeChild(box); }, 2000);
+  }
+  function beep(kind) {
+    if (!soundOn) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      actx = actx || new AC();
+      var notes = kind === "ok" ? [660, 880] : kind === "win" ? [523, 659, 784, 1047] : kind === "pop" ? [740] : [240, 190];
+      notes.forEach(function (f, i) {
+        var o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + i * 0.11;
+        o.type = kind === "bad" ? "triangle" : "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+        o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + 0.22);
+      });
+    } catch (e) { }
+  }
+  function soundBtn() { return '<button class="snd" data-act="sound" aria-label="Sound on or off" title="Sound on/off">' + (soundOn ? "🔊" : "🔇") + "</button>"; }
+
+  /* ---- story cards ---- */
+  var EMO = [[/foil/i, "✨"], [/latex|hi-?float/i, "🎈"], [/helium|tank|gas/i, "⛽"], [/refund|bond|exchange/i, "💸"], [/card|eftpos|payment|cash|split|till/i, "💳"], [/order|form|note/i, "📝"], [/loyal|points/i, "⭐"], [/customer|service|greet|vibe|phrase|say/i, "😊"], [/cake|bake|icing|colour|sprinkle/i, "🍰"], [/vinyl|garland|arch/i, "🎀"], [/phone|call/i, "📞"], [/price|cost|\$/i, "💲"], [/never|don't|careful|warning/i, "⚠️"], [/party|theme|supplies/i, "🎉"], [/difficult|angry|upset|complain/i, "🧘"]];
+  var EMO_FALLBACK = ["✨", "🎈", "🎉", "💡", "🌟", "🎯"];
+  var cardCache = {};
+  function lessonCards(l) {
+    var key = l.title + "|" + l.body.length; if (cardCache[key]) return cardCache[key];
+    var box = document.createElement("div"); box.innerHTML = l.body;
+    var cards = [], cur = null;
+    function flush() { if (cur && cur.html.replace(/<[^>]*>/g, "").trim()) cards.push(cur); cur = null; }
+    function start(title) { cur = { title: title, html: "", len: 0 }; }
+    start(l.title);
+    [].forEach.call(box.childNodes, function (n) {
+      if (n.nodeType !== 1) return;
+      if (n.tagName === "H4" || n.tagName === "H3") { flush(); start(n.textContent.trim()); return; }
+      var tl = (n.textContent || "").length;
+      if (cur.len > 650 && cur.html) { var t = cur.title; flush(); start(t); }
+      cur.html += n.outerHTML; cur.len += tl;
+    });
+    flush();
+    if (!cards.length) cards.push({ title: l.title, html: "<p>" + esc(l.title) + "</p>", len: 0 });
+    cards.forEach(function (c, i) {
+      var probe = c.title + " " + c.html.replace(/<[^>]*>/g, " ").slice(0, 160), e = null;
+      for (var k = 0; k < EMO.length; k++) if (EMO[k][0].test(probe)) { e = EMO[k][1]; break; }
+      c.emoji = e || EMO_FALLBACK[i % EMO_FALLBACK.length];
+    });
+    cardCache[key] = cards; return cards;
+  }
+
+  /* ---- animated role-play scenes ---- */
+  var FACES = {
+    neutral: { m: '<path d="M44 66 Q55 70 66 66" />', b: "n" },
+    smile: { m: '<path d="M42 62 Q55 78 68 62" />', b: "n", blush: 1 },
+    bigsmile: { m: '<path d="M40 60 Q55 86 70 60 Z" fill="#fff" />', b: "up", blush: 1 },
+    bored: { m: '<path d="M45 67 L65 67" />', b: "flat", lid: 1 },
+    upset: { m: '<path d="M44 71 Q55 60 66 71" />', b: "sad" },
+    surprised: { m: '<ellipse cx="55" cy="68" rx="5" ry="7" fill="#7a2e2e" />', b: "up" },
+    stressed: { m: '<path d="M43 68 Q49 63 55 68 T67 68" />', b: "worry", sweat: 1 },
+    relieved: { m: '<path d="M43 63 Q55 77 67 63" />', b: "n", blush: 1 },
+    angry: { m: '<path d="M42 72 Q55 58 68 72" />', b: "sad" }
+  };
+  function charSvg(kind, face, dir, pal) {
+    var f = FACES[face] || FACES.neutral, staff = kind === "staff";
+    var skin = staff ? "#f6cfa8" : "#e9b68c", hair = staff ? "#4a2f1b" : "#2d1b12", shirt = staff ? "#1e6fd9" : "#ff6f91", px = 2 * dir;
+    if (pal) { skin = pal.skin || skin; hair = pal.hair || hair; shirt = pal.shirt || shirt; }
+    var brows = { n: ["M36 34 L48 33", "M62 33 L74 34"], up: ["M36 30 L48 29", "M62 29 L74 30"], flat: ["M36 36 L48 36", "M62 36 L74 36"], sad: ["M36 32 L48 36", "M62 36 L74 32"], worry: ["M36 36 L48 31", "M62 31 L74 36"] }[f.b];
+    var hairSvg = staff ? '<path d="M24 44 Q22 14 55 14 Q88 14 86 44 Q80 28 55 28 Q30 28 24 44Z" fill="' + hair + '"/>' : '<circle cx="55" cy="10" r="11" fill="' + hair + '"/><path d="M23 46 Q20 12 55 13 Q90 12 87 46 Q82 26 55 26 Q28 26 23 46Z" fill="' + hair + '"/>';
+    return '<svg viewBox="0 0 110 150" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<path d="M8 150 Q8 100 55 100 Q102 100 102 150Z" fill="' + shirt + '"/><rect x="46" y="84" width="18" height="20" rx="6" fill="' + skin + '"/>' +
+      (staff ? '<circle cx="80" cy="122" r="8" fill="#fff"/><circle cx="80" cy="122" r="4.5" fill="#1e6fd9"/>' : '<path d="M44 102 Q55 114 66 102" stroke="#fff" stroke-width="3" fill="none" opacity=".7"/>') +
+      '<circle cx="55" cy="50" r="30" fill="' + skin + '"/>' + hairSvg +
+      '<g class="eyes"><ellipse cx="43" cy="46" rx="5.5" ry="6.5" fill="#fff"/><ellipse cx="67" cy="46" rx="5.5" ry="6.5" fill="#fff"/><circle cx="' + (43 + px) + '" cy="47" r="3" fill="#2b2b2b"/><circle cx="' + (67 + px) + '" cy="47" r="3" fill="#2b2b2b"/>' +
+      (f.lid ? '<rect x="37" y="39" width="12" height="7" fill="' + skin + '"/><rect x="61" y="39" width="12" height="7" fill="' + skin + '"/>' : "") + "</g>" +
+      '<g stroke="' + hair + '" stroke-width="2.6" stroke-linecap="round" fill="none"><path d="' + brows[0] + '"/><path d="' + brows[1] + '"/></g>' +
+      (f.blush ? '<circle cx="35" cy="60" r="5" fill="#ff8aa0" opacity=".45"/><circle cx="75" cy="60" r="5" fill="#ff8aa0" opacity=".45"/>' : "") +
+      '<g stroke="#7a2e2e" stroke-width="2.6" stroke-linecap="round" fill="none">' + f.m + "</g>" +
+      (f.sweat ? '<path d="M82 36 Q86 44 82 48 Q78 44 82 36Z" fill="#7cc8ff"/>' : "") + "</svg>";
+  }
+  function pipSvg() {
+    return '<svg viewBox="0 0 90 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M45 92 Q40 110 48 128" stroke="#999" stroke-width="2" fill="none"/><path d="M45 88 L38 98 L52 98Z" fill="#e0a800"/><ellipse cx="45" cy="48" rx="34" ry="42" fill="#ffc93c"/><ellipse cx="32" cy="30" rx="8" ry="12" fill="#fff" opacity=".45"/><circle cx="35" cy="48" r="4.5" fill="#2b2b2b"/><circle cx="56" cy="48" r="4.5" fill="#2b2b2b"/><path d="M34 62 Q45 76 57 62" stroke="#7a2e2e" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="27" cy="58" r="5" fill="#ff8aa0" opacity=".5"/><circle cx="64" cy="58" r="5" fill="#ff8aa0" opacity=".5"/></svg>';
+  }
+  function sceneSeq(sc) {
+    var seq = [];
+    sc.parts.forEach(function (p, pi) { seq.push({ t: "title", pi: pi, label: p.label, mood: p.mood }); p.beats.forEach(function (b) { var x = {}; for (var k in b) x[k] = b[k]; x.pi = pi; x.mood = p.mood; seq.push(x); }); });
+    seq.push({ t: "end" }); return seq;
+  }
+  function sceneInner() {
+    var st = sceneState, m = modById(st.id), sc = m.scenes[st.si], seq = st.seq, b = seq[st.i], total = seq.length;
+    if (b.t === "end") {
+      return '<div class="story-top"><button class="btn sm alt" data-act="sceneexit">✕ Close</button><span class="muted">Scene complete</span>' + soundBtn() + '</div><div class="scene-end"><div class="pip">' + pipSvg() + '</div><div class="pipsay"><h3>Pip\'s 3 tips 🎈</h3><ol>' + sc.tips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + '</ol></div></div><div class="sctl"><button class="btn alt" data-act="scprev">← Back</button><button class="btn alt" data-act="screplay">↺ Watch again</button><button class="btn" data-act="sceneexit">Back to lessons</button></div>';
+    }
+    var faces = { staff: "neutral", cust: "neutral" }, last = null, mood = b.mood || (seq[Math.max(0, st.i - 1)] || {}).mood;
+    for (var i = 0; i <= st.i; i++) { var x = seq[i]; if (x.t === "title") { faces = { staff: "neutral", cust: "neutral" }; last = null; } else if (x.who) { faces[x.who] = x.face || "neutral"; var o = x.who === "staff" ? "cust" : "staff"; if (x.other) faces[o] = x.other; last = x; } }
+    var speaker = b.who || null, h = '<div class="story-top"><button class="btn sm alt" data-act="sceneexit">✕ Close</button><span class="muted">' + esc(sc.title) + "</span>" + soundBtn() + "</div>";
+    h += '<div class="stage ' + (mood === "good" ? "good" : mood === "bad" ? "bad" : "") + '">' +
+      '<svg class="wall" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g><path d="M40 70 Q44 130 36 170" stroke="#aaa" fill="none"/><ellipse cx="40" cy="55" rx="17" ry="21" fill="#ff6f91"/><path d="M70 60 Q66 120 74 175" stroke="#aaa" fill="none"/><ellipse cx="70" cy="46" rx="15" ry="19" fill="#ffc93c"/><path d="M360 70 Q356 130 364 170" stroke="#aaa" fill="none"/><ellipse cx="360" cy="55" rx="17" ry="21" fill="#8b5cf6"/><path d="M332 62 Q336 120 328 175" stroke="#aaa" fill="none"/><ellipse cx="332" cy="48" rx="15" ry="19" fill="#4fd6a7"/></g></svg>' +
+      '<div class="partbadge ' + (mood === "good" ? "good" : "bad") + '">' + (mood === "good" ? "✅ " : "❌ ") + esc((sc.parts[b.pi] || {}).label || "") + "</div>";
+    if (b.t === "title") h += '<div class="titlecard ' + b.mood + '"><div class="bigemoji">' + (b.mood === "good" ? "✅" : "❌") + "</div><h2>" + esc(b.label) + "</h2></div>";
+    else if (b.note) h += '<div class="note" key="' + st.i + '">' + esc(b.note) + "</div>";
+    else h += '<div class="bubble ' + (speaker === "cust" ? "l" : "r") + '" key="' + st.i + '">' + esc(b.say) + "</div>";
+    h += '<div class="char cust' + (speaker === "cust" ? " speaking" : "") + '">' + charSvg("cust", faces.cust, 1, sc.cust) + '<span class="nm">' + esc((sc.cust && sc.cust.name) || "Customer") + '</span></div>' +
+      '<div class="char staff' + (speaker === "staff" ? " speaking" : "") + '">' + charSvg("staff", faces.staff, -1) + '<span class="nm">You (staff)</span></div><div class="counter"></div>' +
+      (b.fx ? '<div class="fx ' + (speaker === "cust" ? "fl" : "fr") + '">' + b.fx + "</div>" : "") + "</div>";
+    var dots = ""; for (var d = 0; d < total - 1; d++) dots += '<i class="' + (d < st.i ? "past" : d === st.i ? "now" : "") + '"></i>';
+    h += '<div class="dots sdots">' + dots + '</div><div class="sctl"><button class="btn alt" data-act="scprev"' + (st.i === 0 ? " disabled" : "") + '>← Back</button><button class="btn alt" data-act="scplay">' + (st.playing ? "⏸ Pause" : "▶ Play") + '</button><button class="btn" data-act="scnext">Next →</button></div>';
+    return h;
+  }
+  function sceneRefresh() { var el = document.getElementById("scene"); if (el) el.innerHTML = sceneInner(); }
+  function sceneSchedule() {
+    clearTimeout(sceneTimer); var st = sceneState; if (!st || !st.playing) return;
+    var b = st.seq[st.i]; if (b.t === "end") return;
+    var ms = b.t === "title" ? 1700 : 1500 + ((b.say || b.note || "").length * 45);
+    sceneTimer = setTimeout(function () { if (!sceneState || !document.getElementById("scene")) return; sceneGo(1); }, ms);
+  }
+  function sceneGo(d) {
+    var st = sceneState; if (!st) return; var n = Math.max(0, Math.min(st.seq.length - 1, st.i + d)); if (n === st.i) return;
+    st.i = n; var b = st.seq[n];
+    if (b.t === "end") { st.playing = false; confetti(70, true); beep("win"); } else if (b.who) beep("pop");
+    sceneRefresh(); sceneSchedule();
+  }
+  function sceneClose() { clearTimeout(sceneTimer); var id = sceneState && sceneState.id; sceneState = null; if (id) renderModule(id, "learn"); }
+  /* ================= GAMES ================= */
+  var CUSTS = [
+    { name: "Rushed mum", skin: "#e9b68c", hair: "#2d1b12", shirt: "#ff6f91" },
+    { name: "Corporate client", skin: "#d9a577", hair: "#1c1c1c", shirt: "#475569" },
+    { name: "Birthday dad", skin: "#f1c8a0", hair: "#7a4a21", shirt: "#10b981" },
+    { name: "Cake lover", skin: "#c68642", hair: "#1a1109", shirt: "#8b5cf6" },
+    { name: "Nana", skin: "#f3d2b3", hair: "#d8d8d8", shirt: "#f59e0b" },
+    { name: "Student", skin: "#b9783f", hair: "#111", shirt: "#0ea5e9" }
+  ];
+  var GAME_INFO = {
+    pop: { icon: "🎈", name: "Balloon Pop", desc: "Pop the right answer before the timer runs out. 3 lives!" },
+    serve: { icon: "🛎️", name: "Serve Rush", desc: "Customers are waiting. Say the right thing before they lose patience!" },
+    inflate: { icon: "⛽", name: "Inflate Challenge", desc: "Hold to inflate, release at the right size. Don't pop it!" }
+  };
+  function gamesFor(m) {
+    var a = []; if (m.quiz && m.quiz.length >= 3) a.push("pop"); if (m.serve && m.serve.length >= 3) a.push("serve"); if (m.inflate && m.inflate.length) a.push("inflate"); return a;
+  }
+  function gameStop() { if (gameState) { clearTimeout(gameState.timer); clearTimeout(gameState.auto); if (gameState.raf) cancelAnimationFrame(gameState.raf); } }
+  function totalXp() { var t = 0, g = (progress && progress.games) || {}; Object.keys(g).forEach(function (k) { Object.keys(g[k]).forEach(function (t2) { t += (g[k][t2].best || 0); }); }); return t; }
+  function viewPlay(m) {
+    if (gameState && gameState.mid === m.id) return '<div id="game">' + gameInner() + "</div>";
+    var list = gamesFor(m), gm = (progress.games || {})[m.id] || {};
+    var h = '<div class="card"><h3>🎮 Game zone</h3><p>Practice what you learned the fun way. Games don\'t change your training progress, so go wild. <strong>⭐ Your total XP: ' + totalXp() + "</strong></p></div>";
+    if (!list.length) return h + '<p class="muted">No games for this module yet.</p>';
+    h += '<div class="gcards">';
+    list.forEach(function (g) {
+      var info = GAME_INFO[g], b = gm[g], st = b ? "★★★".slice(0, b.stars || 0) + "☆☆☆".slice(0, 3 - (b.stars || 0)) : "☆☆☆";
+      h += '<div class="gcard"><div class="gic">' + info.icon + '</div><div class="gtx"><strong>' + info.name + "</strong><small>" + info.desc + '</small><span class="gbest">' + (b ? "Best: ⭐ " + b.best + " · " + st + " · played " + b.plays + "×" : "Not played yet") + '</span></div><button class="btn" data-act="gplay" data-id="' + m.id + '" data-g="' + g + '">Play</button></div>';
+    });
+    return h + "</div>";
+  }
+  function startGame(mid, type) {
+    var m = modById(mid), rounds = [];
+    if (type === "pop") rounds = shuffle(m.quiz.map(function (x) { var idx = shuffle(x.o.map(function (_, k) { return k; })); return { q: x.q, opts: idx.map(function (k) { return x.o[k]; }), a: idx.indexOf(x.a), w: x.w }; })).slice(0, 8);
+    else if (type === "serve") rounds = shuffle(m.serve.map(function (x, i) { var idx = shuffle(x.opts.map(function (_, k) { return k; })); return { cust: x.cust, face: x.face || "neutral", line: x.line, opts: idx.map(function (k) { return x.opts[k]; }), a: idx.indexOf(x.a), w: x.w, pal: CUSTS[i % CUSTS.length] }; })).slice(0, 6);
+    else rounds = m.inflate.map(function (x) { if (x.type === "pick") { var idx = shuffle(x.o.map(function (_, k) { return k; })); return { type: "pick", q: x.q, opts: idx.map(function (k) { return x.o[k]; }), a: idx.indexOf(x.a), w: x.w }; } return x; });
+    gameStop();
+    gameState = { mid: mid, type: type, rounds: rounds, i: 0, lives: 3, score: 0, streak: 0, bestStreak: 0, right: 0, res: [], phase: "play", dur: type === "serve" ? 14 : 16, fb: null };
+    postRender = function () { gameStartRound(); };
+    renderModule(mid, "play");
+  }
+  function gameStartRound() {
+    var g = gameState; if (!g) return; clearTimeout(g.timer); clearTimeout(g.auto);
+    g.phase = "play"; g.fb = null; g.t0 = Date.now(); g.hold = null;
+    if (g.type === "pop" || g.type === "serve") g.timer = setTimeout(function () { gameAnswer(-1); }, g.dur * 1000);
+    gameRefresh();
+  }
+  function gameRefresh() { var el = document.getElementById("game"); if (el) el.innerHTML = gameInner(); }
+  function gameHdr(g) {
+    var hearts = ""; for (var i = 0; i < 3; i++) hearts += i < g.lives ? "❤️" : "🖤";
+    var dots = ""; for (var d = 0; d < g.rounds.length; d++) dots += '<i class="' + (d < g.res.length ? (g.res[d] ? "ok" : "bad") : d === g.i ? "now" : "") + '"></i>';
+    return '<div class="story-top"><button class="btn sm alt" data-act="gexit">✕ Quit</button><span class="hearts">' + hearts + '</span><span class="gscore">⭐ ' + g.score + "</span>" + (g.streak >= 2 ? '<span class="streak hot">🔥 ' + g.streak + "</span>" : "") + soundBtn() + '</div><div class="dots">' + dots + "</div>";
+  }
+  function whyPanel(g, r) {
+    var fb = g.fb, last = g.lives <= 0 || g.i + 1 >= g.rounds.length;
+    var ans = (r.type === "hold" || fb.ok) ? "" : "<br>✅ " + esc(r.opts[r.a]);
+    return '<div class="why fb ' + (fb.ok ? "okfb" : "badfb") + '"><strong>' + esc(fb.msg) + (fb.pts ? " +" + fb.pts + " ⭐" : "") + "</strong>" + ans + "<br>" + esc(r.w) + '</div><div class="row" style="justify-content:center"><button class="btn" data-act="gnext">' + (last ? "See results 🏁" : "Next →") + "</button></div>";
+  }
+  function optBtns(g, r, fb) {
+    var h = "";
+    r.opts.forEach(function (o, i) {
+      var cls = "opt", dis = ""; if (fb) { dis = " disabled"; if (i === r.a) cls += " right"; else if (i === g.fb.pick) cls += " wrong"; }
+      h += '<button class="' + cls + '"' + dis + ' data-act="gpick" data-i="' + i + '"><b class="let">' + "ABCD".charAt(i) + "</b><span>" + esc(o) + "</span></button>";
+    });
+    return h;
+  }
+  function gameInner() {
+    var g = gameState; if (g.phase === "end") return gameEnd(g);
+    var r = g.rounds[g.i], fb = g.phase === "fb", h = gameHdr(g);
+    if (g.type === "pop") {
+      h += '<div class="gq">' + esc(r.q) + '</div><div class="gtimer' + (fb ? " stop" : "") + '"><span' + (fb ? "" : ' style="animation-duration:' + g.dur + 's"') + "></span></div>";
+      h += '<div class="popfield' + (fb ? " settled" : "") + '">';
+      r.opts.forEach(function (o, i) {
+        var cls = "pballoon pb" + (i % 4);
+        if (fb) { if (i === r.a) cls += g.fb.ok ? " popped" : " reveal"; else if (i === g.fb.pick) cls += " bad"; else if (g.fb.ok) cls += " away"; }
+        h += '<button class="' + cls + '" style="animation-delay:' + (i * 0.12) + 's" data-act="gpick" data-i="' + i + '"' + (fb ? " disabled" : "") + "><span>" + esc(o) + "</span></button>";
+      });
+      h += "</div>";
+      if (fb) h += whyPanel(g, r);
+      return h;
+    }
+    if (g.type === "serve") {
+      var face = fb ? (g.fb.ok ? "bigsmile" : "upset") : r.face;
+      h += '<div class="srv"><div class="srvc' + (fb && !g.fb.ok ? " leave" : "") + '">' + charSvg("cust", face, 1, r.pal) + '<span class="nm">' + esc(r.cust || "Customer") + '</span></div><div class="srvbub">' + esc(r.line) + "</div></div>";
+      h += '<div class="gtimer patience' + (fb ? " stop" : "") + '"><span' + (fb ? "" : ' style="animation-duration:' + g.dur + 's"') + '></span></div><div class="muted" style="font-size:.8rem;margin:-2px 0 8px">Patience</div>';
+      h += optBtns(g, r, fb);
+      if (fb) h += whyPanel(g, r);
+      return h;
+    }
+    if (r.type === "pick") {
+      h += '<div class="card"><div class="gq" style="margin-top:0">⛽ ' + esc(r.q) + "</div>" + optBtns(g, r, fb) + "</div>";
+      if (fb) h += whyPanel(g, r);
+      return h;
+    }
+    h += '<div class="gq">⛽ ' + esc(r.label) + '</div><div class="inflstage"><div class="ring full"><em>full size</em></div>' + (r.showTest ? '<div class="ring test"><em>70%</em></div>' : "") +
+      '<div class="gbal' + (fb && g.fb.popped ? " popit" : "") + '" id="gbal" style="transform:scale(' + (fb ? Math.min(g.fb.size, 1.3) : 0.06) + ')"></div></div>';
+    if (!fb) h += '<div class="row" style="justify-content:center"><button class="holdbtn" data-hold="1">🎈 Hold to inflate</button></div><p class="muted" style="text-align:center;font-size:.85rem">Press and hold. Let go when the balloon fits the dotted ring.</p>';
+    else h += whyPanel(g, r);
+    return h;
+  }
+  function pickOf(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function gameAnswer(pick) {
+    var g = gameState; if (!g || g.phase !== "play") return; clearTimeout(g.timer);
+    var r = g.rounds[g.i], ok = pick === r.a, frac = Math.max(0, 1 - (Date.now() - g.t0) / (g.dur * 1000)), pts = 0, msg;
+    if (ok) { g.streak++; g.bestStreak = Math.max(g.bestStreak, g.streak); g.right++; pts = 100 + Math.round(50 * frac) + Math.min(g.streak - 1, 5) * 10; g.score += pts; msg = pickOf(g.type === "serve" ? ["Happy customer! 😍", "Smooth service! ✨", "They'll be back! 🎈", "Five stars! ⭐"] : OK_MSGS); }
+    else { g.streak = 0; g.lives--; msg = pick === -1 ? (g.type === "serve" ? "The customer got tired of waiting and left 😕" : "Time's up! ⏰") : pickOf(BAD_MSGS); }
+    g.res.push(ok); g.fb = { ok: ok, pick: pick, msg: msg, pts: pts }; g.phase = "fb";
+    gameRefresh();
+    if (ok) { confetti(22, false); beep("ok"); g.auto = setTimeout(function () { if (gameState === g && g.phase === "fb") gameNext(); }, g.type === "pop" ? 2800 : 3400); } else beep("bad");
+  }
+  function holdStart() {
+    var g = gameState; if (!g || g.type !== "inflate" || g.phase !== "play") return; var r = g.rounds[g.i]; if (r.type !== "hold" || g.hold) return;
+    g.hold = { t0: performance.now(), size: 0 }; var el = document.getElementById("gbal");
+    function f(ts) { if (!g.hold) return; g.hold.size = (ts - g.hold.t0) / (r.secs * 1000); if (el) el.style.transform = "scale(" + Math.max(0.06, g.hold.size) + ")"; if (g.hold.size > 1.3) { holdEnd(); return; } g.raf = requestAnimationFrame(f); }
+    g.raf = requestAnimationFrame(f); beep("pop");
+  }
+  function holdEnd() {
+    var g = gameState; if (!g || !g.hold) return; cancelAnimationFrame(g.raf);
+    var r = g.rounds[g.i], size = g.hold.size, popped = size > 1.25; g.hold = null;
+    if (size < 0.08) return;
+    var ok = !popped && size >= r.lo && size <= r.hi, pts = 0, msg;
+    if (ok) { g.streak++; g.bestStreak = Math.max(g.bestStreak, g.streak); g.right++; var c = (r.lo + r.hi) / 2, half = (r.hi - r.lo) / 2; pts = 100 + Math.round(50 * (1 - Math.abs(size - c) / half)) + Math.min(g.streak - 1, 5) * 10; g.score += pts; msg = Math.abs(size - c) < half * 0.4 ? "Perfect fit! 🎯" : "Nice! Right in the zone ✅"; }
+    else { g.streak = 0; g.lives--; msg = popped ? "💥 POP! Way too much gas." : size < r.lo ? "Too small. Hold a little longer." : "A bit too big. Let go sooner."; }
+    g.res.push(ok); g.fb = { ok: ok, pick: -2, msg: msg, pts: pts, size: size, popped: popped }; g.phase = "fb";
+    gameRefresh(); if (ok) { confetti(22, false); beep("ok"); } else beep("bad");
+  }
+  function gameNext() {
+    var g = gameState; if (!g) return; clearTimeout(g.auto); g.i++;
+    if (g.lives <= 0 || g.i >= g.rounds.length) { gameFinish(g); return; }
+    gameStartRound();
+  }
+  function gameFinish(g) {
+    gameStop(); var total = g.rounds.length, acc = g.right / total, stars = acc >= 0.9 ? 3 : acc >= 0.6 ? 2 : 1;
+    var all = progress.games = progress.games || {}, mg = all[g.mid] = all[g.mid] || {}, prev = mg[g.type] || { best: 0, plays: 0, stars: 0 };
+    g.newBest = g.score > prev.best; g.stars = stars; g.out = g.lives <= 0;
+    mg[g.type] = { best: Math.max(prev.best, g.score), stars: Math.max(prev.stars, stars), plays: prev.plays + 1, last: g.score, at: nowIso() };
+    persist(); g.phase = "end"; gameRefresh(); if (!g.out) confetti(stars >= 2 ? 80 : 40, true); beep(g.out ? "bad" : "win");
+  }
+  function gameEnd(g) {
+    var info = GAME_INFO[g.type], st = ""; for (var k = 1; k <= 3; k++) st += '<span class="star' + (k <= g.stars ? " on" : "") + '" style="animation-delay:' + (0.4 + k * 0.25) + 's">★</span>';
+    return '<div class="card result" style="text-align:center"><div class="stars">' + st + '</div><div class="bigemoji">' + (g.out ? "💔" : g.stars === 3 ? "🏆" : "🎉") + "</div><h2>" + (g.out ? "Out of lives!" : g.stars === 3 ? "Legendary run!" : "Nice work!") + "</h2><p>" + info.name + ": <strong>" + g.right + " of " + g.rounds.length + '</strong> right</p><div class="score pass">⭐ ' + g.score + "</div>" +
+      (g.newBest ? '<p><span class="streak hot">🏆 New best!</span></p>' : "") + (g.bestStreak >= 3 ? '<p class="muted">Best streak: 🔥 ' + g.bestStreak + "</p>" : "") +
+      '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn" data-act="gplay" data-id="' + g.mid + '" data-g="' + g.type + '">Play again</button><button class="btn alt" data-act="gexit">Back to games</button></div></div>';
+  }
+  document.addEventListener("pointerdown", function (e) { if (e.target.closest && e.target.closest("[data-hold]")) { e.preventDefault(); holdStart(); } });
+  ["pointerup", "pointercancel"].forEach(function (ev) { document.addEventListener(ev, function () { if (gameState && gameState.hold) holdEnd(); }); });
+
   function viewLearn(m, openLesson) {
+    if (sceneState && sceneState.id === m.id) return '<div id="scene">' + sceneInner() + "</div>";
+    if (storyState && storyState.id === m.id) return storyView(m);
     var read = progress.read[m.id] || [], h = "";
-    if (m.videos) {
+    if (m.videos && m.videos.length) {
       h += '<h3>🎬 Videos</h3><div class="videos">' + m.videos.map(function (v) {
         if (/\.mp4$/i.test(v.url || "")) return '<div class="vid" style="display:block"><div style="margin-bottom:6px">▶ ' + esc(v.title) + '</div><video controls preload="metadata" playsinline style="width:100%;max-width:340px;border-radius:10px;background:#000" src="' + esc(v.url) + '"></video></div>';
         return '<div class="vid"><span>▶ ' + esc(v.title) + '</span>' + (v.url ? '<a class="btn sm" target="_blank" rel="noopener" href="' + esc(v.url) + '">Watch</a>' : '<span class="pill">Ask your trainer</span>') + "</div>";
       }).join("") + "</div>";
     }
-    h += "<h3>📖 Lessons</h3>";
+    if (m.scenes && m.scenes.length) {
+      h += "<h3>🎭 Role-play</h3><div class=\"ltiles\">" + m.scenes.map(function (sc, i) {
+        return '<button class="ltile scene-tile" data-act="sceneopen" data-id="' + m.id + '" data-i="' + i + '"><span class="lnum">🎭</span><span class="ltxt"><strong>' + esc(sc.title) + "</strong><small>" + esc(sc.blurb || "Animated scene") + '</small></span><span class="go">▶</span></button>';
+      }).join("") + "</div>";
+    }
+    h += "<h3>📖 Lessons <small class=\"muted\" style=\"font-weight:400\">tap one to start</small></h3><div class=\"ltiles\">";
     m.lessons.forEach(function (l, i) {
-      var isRead = read.indexOf(i) >= 0;
-      h += '<details class="lesson' + (isRead ? " read" : "") + '"' + (openLesson === i ? " open" : "") + '><summary><span>' + esc(l.title) + '</span>' + (isRead ? '<span class="tick">✓ Read</span>' : "") + '</summary><div class="body">' + l.body +
-        '<div class="row" style="margin-top:14px"><button class="btn sm' + (isRead ? " alt" : "") + '" data-act="read" data-id="' + m.id + '" data-i="' + i + '">' + (isRead ? "Mark as unread" : "✓ Got it: mark as read") + "</button></div></div></details>";
+      var isRead = read.indexOf(i) >= 0, n = lessonCards(l).length;
+      h += '<button class="ltile' + (isRead ? " read" : "") + '" data-act="storyopen" data-id="' + m.id + '" data-i="' + i + '"><span class="lnum">' + (isRead ? "✓" : i + 1) + '</span><span class="ltxt"><strong>' + esc(l.title) + "</strong><small>" + n + " cards · about " + Math.max(1, Math.round(n * 0.7)) + ' min</small></span><span class="go">▶</span></button>';
     });
+    h += "</div>";
     if (read.length >= m.lessons.length) h += '<div class="card"><strong>All lessons read! 🎉</strong> <button class="btn sm" data-act="tab" data-id="' + m.id + '" data-tab="quiz">Take the quiz →</button></div>';
     return h;
+  }
+  function storyView(m) {
+    var st = storyState, l = m.lessons[st.li], cards = lessonCards(l), total = cards.length + 1, done = st.ci >= cards.length;
+    var seg = ""; for (var i = 0; i < total; i++) seg += '<span class="' + (i < st.ci ? "past" : i === st.ci ? "now" : "") + '"></span>';
+    var h = '<div class="story"><div class="story-top"><button class="btn sm alt" data-act="storyexit">✕ All lessons</button><span class="muted">Lesson ' + (st.li + 1) + " of " + m.lessons.length + "</span>" + soundBtn() + '</div><div class="seg">' + seg + "</div>";
+    var dir = st.dir > 0 ? "dir-r" : "dir-l";
+    if (!done) {
+      var c = cards[st.ci];
+      h += '<div class="scard c' + (st.ci % 6) + " " + dir + '"><div class="shead"><div class="semoji">' + c.emoji + '</div><div><div class="skick">' + esc(l.title) + "</div><h2>" + esc(c.title) + '</h2></div></div><div class="sbody">' + c.html + "</div></div>";
+      h += '<div class="snav"><button class="btn alt" data-act="sprev"' + (st.ci === 0 ? " disabled" : "") + '>← Back</button><span class="muted">' + (st.ci + 1) + " / " + total + '</span><button class="btn" data-act="snext">' + (st.ci === cards.length - 1 ? "Finish ✓" : "Next →") + "</button></div>";
+      h += '<p class="muted" style="text-align:center;font-size:.82rem">Tip: swipe left or right, or use the arrow keys.</p>';
+    } else {
+      var last = st.li >= m.lessons.length - 1;
+      h += '<div class="scard done ' + dir + '"><div class="bigemoji">🎉</div><h2>Lesson complete!</h2><p>You finished <strong>' + esc(l.title) + "</strong>.</p>" +
+        '<div class="row" style="justify-content:center;margin-top:12px">' +
+        (last ? '<button class="btn" data-act="tab" data-id="' + m.id + '" data-tab="quiz">Take the quiz 🧠</button>' : '<button class="btn" data-act="snextlesson">Next lesson →</button>') +
+        '<button class="btn alt" data-act="storyredo">↺ Replay</button><button class="btn alt" data-act="storyexit">All lessons</button></div></div>';
+    }
+    return h + "</div>";
+  }
+  function storyStep(d) {
+    var st = storyState; if (!st) return; var m = modById(st.id), cards = lessonCards(m.lessons[st.li]);
+    var n = Math.max(0, Math.min(cards.length, st.ci + d)); if (n === st.ci) return;
+    st.dir = d; st.ci = n;
+    if (n >= cards.length) {
+      var arr = progress.read[m.id] || []; if (arr.indexOf(st.li) < 0) { arr.push(st.li); progress.read[m.id] = arr; persist(); }
+      postRender = function () { confetti(46, true); beep("win"); };
+    } else postRender = function () { beep("pop"); };
+    renderModule(st.id, "learn", undefined, true);
+    var sc = document.querySelector(".story"); if (sc && sc.getBoundingClientRect().top < 0) sc.scrollIntoView();
   }
 
   function viewSkills(m) {
@@ -323,31 +640,51 @@
   }
   function startQuiz(id) {
     var m = modById(id);
-    quizState = { id: id, qs: shuffle(m.quiz.map(function (x, i) { var idx = shuffle(x.o.map(function (_, k) { return k; })); return { i: i, q: x.q, opts: idx.map(function (k) { return x.o[k]; }), a: idx.indexOf(x.a), w: x.w }; })), n: 0, score: 0, picked: null, wrong: [] };
+    quizState = { id: id, qs: shuffle(m.quiz.map(function (x, i) { var idx = shuffle(x.o.map(function (_, k) { return k; })); return { i: i, q: x.q, opts: idx.map(function (k) { return x.o[k]; }), a: idx.indexOf(x.a), w: x.w }; })), n: 0, score: 0, picked: null, wrong: [], streak: 0, best: 0, res: [], fresh: true, msg: "" };
     renderModule(id, "quiz");
   }
+  var OK_MSGS = ["Nailed it! 🎯", "Spot on! ✨", "Boom! 💥", "Party Mix pro! 🎈", "You got it! 🙌", "Too easy! 😎"];
+  var BAD_MSGS = ["Not quite, but you've got this 💪", "Close! Here's the trick 👇", "Good try! Now you know 💡", "Oops! Remember this one 🧠"];
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
   function renderQuizQ(m) {
     var s = quizState, total = s.qs.length;
     if (s.n >= total) return renderQuizResult(m);
-    var q = s.qs[s.n], h = '<div class="card"><div class="muted">Question ' + (s.n + 1) + " of " + total + '</div><div class="progress dark" style="margin:8px 0 14px"><span style="width:' + Math.round(100 * s.n / total) + '%"></span></div><h3 style="margin-top:0">' + esc(q.q) + "</h3>";
+    var fresh = s.fresh; s.fresh = false;
+    var q = s.qs[s.n], dots = "";
+    for (var d = 0; d < total; d++) dots += '<i class="' + (d < s.res.length ? (s.res[d] ? "ok" : "bad") : d === s.n ? "now" : "") + '"></i>';
+    var h = '<div class="card qcard' + (fresh ? " qfresh" : "") + '"><div class="qtop"><span class="muted">Question ' + (s.n + 1) + " of " + total + '</span><span class="streak' + (s.streak >= 2 ? " hot" : "") + '">' + (s.streak >= 2 ? "🔥 " + s.streak + " in a row" : "Score " + s.score) + "</span>" + soundBtn() + '</div><div class="dots">' + dots + '</div><h3 class="qtext">' + esc(q.q) + "</h3>";
     q.opts.forEach(function (o, i) {
       var cls = "opt", dis = "";
-      if (s.picked != null) { dis = " disabled"; if (i === q.a) cls += " right"; else if (i === s.picked) cls += " wrong"; }
-      h += '<button class="' + cls + '"' + dis + ' data-act="answer" data-i="' + i + '">' + esc(o) + "</button>";
+      if (s.picked != null) { dis = " disabled"; if (i === q.a) cls += s.picked === q.a ? " right" : " right reveal"; else if (i === s.picked) cls += " wrong"; }
+      h += '<button class="' + cls + '"' + dis + ' data-act="answer" data-i="' + i + '"><b class="let">' + "ABCDEFGH".charAt(i) + "</b><span>" + esc(o) + "</span></button>";
     });
     if (s.picked != null) {
       var ok = s.picked === q.a;
-      h += '<div class="why"><strong>' + (ok ? "✅ Correct!" : "❌ Not quite. The right answer: " + esc(q.opts[q.a])) + "</strong><br>" + esc(q.w) + '</div><button class="btn" data-act="nextq">' + (s.n + 1 >= total ? "See my score" : "Next question →") + "</button>";
+      h += '<div class="why fb ' + (ok ? "okfb" : "badfb") + '"><strong>' + esc(s.msg) + (ok ? "" : " The right answer: " + esc(q.opts[q.a])) + (ok && s.streak >= 3 ? " 🔥 " + s.streak + " in a row!" : "") + "</strong><br>" + esc(q.w) + '</div><button class="btn" data-act="nextq">' + (s.n + 1 >= total ? "See my score 🏁" : "Next question →") + "</button>";
     }
     return h + "</div>";
   }
   function answer(i) {
     var s = quizState; if (!s || s.picked != null) return;
-    s.picked = i; var q = s.qs[s.n];
-    if (i === q.a) s.score++; else s.wrong.push(q);
-    renderModule(s.id, "quiz");
+    s.picked = i; var q = s.qs[s.n], ok = i === q.a;
+    if (ok) { s.score++; s.streak++; s.best = Math.max(s.best, s.streak); s.msg = pick(OK_MSGS); } else { s.wrong.push(q); s.streak = 0; s.msg = pick(BAD_MSGS); }
+    s.res.push(ok);
+    postRender = function () { if (ok) { confetti(s.streak >= 3 ? 40 : 22, false); beep("ok"); } else beep("bad"); };
+    renderModule(s.id, "quiz", undefined, true);
   }
-  function nextQ() { quizState.n++; quizState.picked = null; var m = modById(quizState.id); if (quizState.n >= quizState.qs.length) finishQuiz(m); renderModule(quizState.id, "quiz"); }
+  function nextQ() {
+    quizState.n++; quizState.picked = null; quizState.fresh = true;
+    var m = modById(quizState.id), s = quizState;
+    if (s.n >= s.qs.length) { finishQuiz(m); var pass = s.score >= Math.ceil(C.passMark * s.qs.length); postRender = function () { if (pass) { confetti(90, true); beep("win"); } else beep("bad"); countUp(); }; }
+    renderModule(quizState.id, "quiz");
+  }
+  function countUp() {
+    var el = document.querySelector(".score[data-to]"); if (!el) return;
+    var to = parseInt(el.getAttribute("data-to"), 10), tot = el.getAttribute("data-tot"), t0 = null;
+    if (reducedMotion) { el.textContent = to + " / " + tot; return; }
+    function step(ts) { if (!t0) t0 = ts; var p = Math.min(1, (ts - t0) / 900); el.textContent = Math.round(to * p) + " / " + tot; if (p < 1) requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  }
   function finishQuiz(m) {
     var s = quizState; if (s.saved) return; s.saved = true;
     var pass = s.score >= Math.ceil(C.passMark * s.qs.length);
@@ -357,8 +694,12 @@
     persist({ module: m.id, title: m.title, score: s.score, total: s.qs.length, passed: pass, at: nowIso() });
   }
   function renderQuizResult(m) {
-    var s = quizState, total = s.qs.length, need = Math.ceil(C.passMark * total), pass = s.score >= need;
-    var h = '<div class="card" style="text-align:center"><div class="score ' + (pass ? "pass" : "fail") + '">' + s.score + " / " + total + "</div><h2>" + (pass ? "🎉 You passed!" : "Almost there! You need " + need + " to pass.") + "</h2>";
+    var s = quizState, total = s.qs.length, need = Math.ceil(C.passMark * total), pass = s.score >= need, perfect = s.score === total;
+    var stars = perfect ? 3 : pass ? 2 : 1, st = "";
+    for (var k = 1; k <= 3; k++) st += '<span class="star' + (k <= stars ? " on" : "") + '" style="animation-delay:' + (0.5 + k * 0.25) + 's">★</span>';
+    var h = '<div class="card result" style="text-align:center"><div class="stars">' + st + '</div><div class="score ' + (pass ? "pass" : "fail") + '" data-to="' + s.score + '" data-tot="' + total + '">0 / ' + total + "</div><h2>" + (perfect ? "🏆 Perfect score!" : pass ? "🎉 You passed!" : "Almost there! You need " + need + " to pass.") + "</h2>" +
+      (s.best >= 3 ? '<p class="streak hot" style="display:inline-block">🔥 Best streak: ' + s.best + " in a row</p>" : "") +
+      (pass ? "" : '<p class="muted">Every try makes you stronger. Check the ones you missed and go again 💪</p>');
     if (s.wrong.length) { h += '<div style="text-align:left"><h4>Review the ones you missed</h4>' + s.wrong.map(function (q) { return '<div class="why"><strong>' + esc(q.q) + "</strong><br>✅ " + esc(q.opts[q.a]) + "<br>" + esc(q.w) + "</div>"; }).join("") + "</div>"; }
     h += '<div class="row" style="justify-content:center;margin-top:10px"><button class="btn alt" data-act="startquiz" data-id="' + m.id + '">Try again</button><button class="btn" data-act="tab" data-id="' + m.id + '" data-tab="learn" data-endquiz="1">Back to lessons</button>' + nextModBtn(m, pass) + "</div></div>";
     return h;
@@ -713,11 +1054,14 @@
     if (!session) { renderLogin(); return; }
     if (!progress) {
       progress = lsGet("pm_progress_" + keyOf(session.name)) || blankProgress();
-      ["read", "quiz", "skills", "practice", "viewed"].forEach(function (k) { if (!progress[k]) progress[k] = {}; });
+      ["read", "quiz", "skills", "practice", "viewed", "games"].forEach(function (k) { if (!progress[k]) progress[k] = {}; });
     }
     if (!asgLoaded) { asgLoaded = true; assignments = lsGet("pm_asg_" + keyOf(session.name)) || []; refreshAssignments(); }
     if (parts[0] === "m" && parts[1]) {
       if (quizState && quizState.id !== parts[1]) quizState = null;
+      if (storyState && storyState.id !== parts[1]) storyState = null;
+      if (sceneState && sceneState.id !== parts[1]) { clearTimeout(sceneTimer); sceneState = null; }
+      if (gameState && gameState.mid !== parts[1]) { gameStop(); gameState = null; }
       if (parts[2] !== "practice") practiceState = {};
       renderModule(parts[1], parts[2], parts[3] != null ? parseInt(parts[3], 10) : undefined);
     }
@@ -726,6 +1070,18 @@
     setSync(syncStatus);
   }
   window.addEventListener("hashchange", route);
+
+  /* ---------- swipe + keyboard for story cards ---------- */
+  var tx = null, ty = null;
+  document.addEventListener("touchstart", function (e) { if (e.target.closest && e.target.closest(".scard") && e.touches.length === 1) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } else tx = null; }, { passive: true });
+  document.addEventListener("touchend", function (e) {
+    if (tx == null || !storyState) return; var t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty; tx = null;
+    if (Math.abs(dx) > 60 && Math.abs(dy) < 60) storyStep(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  document.addEventListener("keydown", function (e) {
+    if (!storyState || /INPUT|TEXTAREA|SELECT/.test((e.target.tagName || ""))) return;
+    if (e.key === "ArrowRight") storyStep(1); else if (e.key === "ArrowLeft") storyStep(-1);
+  });
 
   /* ---------- events ---------- */
   document.addEventListener("click", function (e) {
@@ -736,12 +1092,30 @@
       case "login": doAuth("login"); break;
       case "register": doAuth("register"); break;
       case "logout": logout(); break;
-      case "tab": if (t.getAttribute("data-endquiz")) quizState = null; if (!t.getAttribute("data-endquiz") && t.getAttribute("data-tab") !== "quiz") quizState = null; location.hash = "#/m/" + id + "/" + t.getAttribute("data-tab"); break;
+      case "tab": if (gameState && t.getAttribute("data-tab") !== "play") { gameStop(); gameState = null; } if (t.getAttribute("data-endquiz")) quizState = null; if (!t.getAttribute("data-endquiz") && t.getAttribute("data-tab") !== "quiz") quizState = null; location.hash = "#/m/" + id + "/" + t.getAttribute("data-tab"); break;
       case "read":
         var i = parseInt(t.getAttribute("data-i"), 10), arr = progress.read[id] || [], at = arr.indexOf(i);
         if (at >= 0) arr.splice(at, 1); else arr.push(i);
         progress.read[id] = arr; persist(); renderModule(id, "learn", i); break;
       case "startquiz": startQuiz(id); break;
+      case "storyopen": storyState = { id: id, li: parseInt(t.getAttribute("data-i"), 10), ci: 0, dir: 1 }; postRender = function () { beep("pop"); }; renderModule(id, "learn"); break;
+      case "sceneopen": var scm = modById(id); sceneState = { id: id, si: parseInt(t.getAttribute("data-i"), 10), i: 0, playing: true, seq: sceneSeq(scm.scenes[parseInt(t.getAttribute("data-i"), 10)]) }; postRender = sceneSchedule; renderModule(id, "learn"); break;
+      case "scplay": sceneState.playing = !sceneState.playing; if (sceneState.playing && sceneState.seq[sceneState.i].t === "end") sceneState.i = 0; sceneRefresh(); sceneSchedule(); break;
+      case "scnext": sceneGo(1); break;
+      case "scprev": sceneGo(-1); break;
+      case "screplay": sceneState.i = 0; sceneState.playing = true; sceneRefresh(); sceneSchedule(); break;
+      case "sceneexit": sceneClose(); break;
+      case "gplay": startGame(id, t.getAttribute("data-g")); break;
+      case "gpick": gameAnswer(parseInt(t.getAttribute("data-i"), 10)); break;
+      case "gnext": gameNext(); break;
+      case "gexit": var gid = gameState && gameState.mid; gameStop(); gameState = null; if (gid) renderModule(gid, "play"); break;
+
+      case "snext": storyStep(1); break;
+      case "sprev": storyStep(-1); break;
+      case "storyexit": var sid = storyState && storyState.id; storyState = null; if (sid) renderModule(sid, "learn"); break;
+      case "snextlesson": storyState = { id: storyState.id, li: storyState.li + 1, ci: 0, dir: 1 }; renderModule(storyState.id, "learn"); break;
+      case "storyredo": storyState.ci = 0; storyState.dir = -1; renderModule(storyState.id, "learn"); break;
+      case "sound": soundOn = !soundOn; try { localStorage.setItem("pm_sound", soundOn ? "1" : "0"); } catch (e) { } t.textContent = soundOn ? "🔊" : "🔇"; if (soundOn) beep("pop"); break;
       case "answer": answer(parseInt(t.getAttribute("data-i"), 10)); break;
       case "nextq": nextQ(); break;
       case "pscen": practiceState = { i: parseInt(t.getAttribute("data-i"), 10) }; renderModule(location.hash.split("/")[2], "practice"); break;
