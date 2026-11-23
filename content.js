@@ -1020,3 +1020,415 @@ window.PM_CONTENT = {
     { q: "Who adds the ABN discount tags to an ABN customer?", o: ["The customer", "Any casual", "A supervisor or manager", "Nobody"], a: 2, w: "Get a supervisor or manager to add the ABN tags." }
   );
 })();
+
+/* ---- Role-play scenes (animated, shown in the module's Learn tab) ---- */
+(function () {
+  var mod = window.PM_CONTENT.modules.filter(function (m) { return m.id === "service"; })[0];
+  if (!mod) return;
+  mod.scenes = [{
+    title: "Greeting a customer: wrong way vs Party Mix way",
+    blurb: "A busy mum, a Saturday morning, and two very different welcomes.",
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { note: "Saturday morning. A stressed mum rushes in. Her daughter's party is this afternoon!" },
+        { who: "cust", face: "stressed", fx: "😰", say: "Hi! I need balloons for my daughter's party today!" },
+        { who: "staff", face: "bored", other: "stressed", say: "Yeah? What do you want?" },
+        { who: "cust", face: "surprised", say: "Umm… a helium bunch? Do you have any left?" },
+        { who: "staff", face: "bored", other: "upset", say: "Hold on." },
+        { who: "cust", face: "upset", fx: "😞", say: "Okay… thanks." },
+        { who: "staff", face: "bored", say: "No worries." },
+        { note: "😕 She feels unwelcome. She leaves unsure, and she might not come back." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { note: "Same mum. Same busy morning. Let's try that again." },
+        { who: "staff", face: "smile", fx: "✨", say: "Hi there! How can I help you today?" },
+        { who: "cust", face: "stressed", other: "smile", say: "I need balloons for my daughter's party this afternoon!" },
+        { who: "staff", face: "bigsmile", fx: "🎉", other: "stressed", say: "Ooh, how exciting! What's the theme? I'll get you sorted nice and quick." },
+        { who: "cust", face: "relieved", say: "Unicorns! And pickup at 2pm." },
+        { who: "staff", face: "smile", say: "One moment please, let me check that for you. Thank you for your patience!" },
+        { who: "cust", face: "bigsmile", fx: "💖", say: "Thank you so much, you're a lifesaver!" },
+        { who: "staff", face: "bigsmile", say: "You're very welcome! It's my pleasure!" },
+        { note: "😍 She feels looked after, and she'll be back. That's the Party Mix way." }
+      ] }
+    ],
+    tips: [
+      "Greet warmly: \"Hi there! How can I help you today?\"",
+      "Match their vibe. A stressed parent wants quick, calm and clear.",
+      "Swap \"No worries\" for \"You're very welcome!\" and \"Hold on\" for \"One moment please.\""
+    ]
+  }];
+})();
+
+/* ---- Serve Rush customers + Inflate Challenge rounds (games) ---- */
+(function () {
+  function M(id) { return window.PM_CONTENT.modules.filter(function (m) { return m.id === id; })[0]; }
+  function S(id, list) { var m = M(id); if (m) m.serve = list; }
+  S("service", [
+    { cust: "Customer", face: "neutral", line: "*walks in and starts browsing*", opts: ["Rush over straight away and ask what they want", "Wait about 10 seconds, then greet them warmly", "Keep stocking shelves and ignore them"], a: 1, w: "The 10-second rule gives them time to settle in so you're noticed, not pounced on." },
+    { face: "bigsmile", line: "Thank you so much for your help!", opts: ["“No worries!”", "“You're very welcome!”", "“Yep.”"], a: 1, w: "We swap casual phrases like “no worries” for warmer ones like “You're very welcome” or “It's my pleasure”." },
+    { face: "stressed", line: "I can't find the cake boards anywhere!", opts: ["Point and say “They're down the back”", "Walk them over to the item", "Say “Ask someone else”"], a: 1, w: "Walking them to the item means they know where it is for next time." },
+    { face: "neutral", line: "Good morning. I'm organising a corporate event and need some information.", opts: ["“Hey! What can I get ya?”", "“Good morning! I'd be happy to help. What do you need?”", "“Yeah, hold on.”"], a: 1, w: "Match their formality. Corporate / ABN clients want polished, direct and professional." },
+    { face: "smile", line: "Okay, I think that's everything!", opts: ["Quote the total straight away", "Double-check every item has been scanned, then quote", "Ask the customer to count their items"], a: 1, w: "The accuracy check comes BEFORE quoting the final price. It protects the customer and the shop." }
+  ]);
+  S("upsell", [
+    { face: "smile", line: "I'll take these 3 helium balloons please.", opts: ["Offer a balloon weight and transport bag", "Just take payment", "Ask if they want a cake board"], a: 0, w: "The always rule: a balloon weight and transport bag with every balloon sale." },
+    { face: "neutral", line: "I'm just getting the cake and nothing else.", opts: ["“Want a board?”", "“Do you need a board to sit that under? It makes carrying and serving so much easier.”", "“You have to buy a board.”"], a: 1, w: "Give a reason, not just a product. That's the strong way to offer a cake board." },
+    { face: "smile", line: "I'll have the 3-balloon arrangement ($13.50).", opts: ["Suggest the 5-balloon arrangement for $20.50", "Say nothing and take payment", "Tell them 3 balloons look small"], a: 0, w: "A small price jump makes a much bigger impact on the table." },
+    { face: "bigsmile", line: "I'll take this pinata for my son's party.", opts: ["Offer a pinata stick", "Offer a cake board", "Nothing, they didn't ask"], a: 0, w: "Suggest what actually fits the purchase: a pinata needs a stick." },
+    { face: "smile", line: "That's all my balloons. Can I pay?", opts: ["“Have you sorted a cake yet? Cake boards and boxes are right there.”", "“Anything else?” (flat voice)", "“Buy more stuff!”"], a: 0, w: "The golden line: “Have you sorted [the other obvious thing] yet?” saves them a second trip." }
+  ]);
+  S("balloons", [
+    { face: "neutral", line: "Does this price include the helium?", opts: ["“Helium is extra.”", "“The tag price includes the balloon, helium, string and Hi-Float.”", "“Hi-Float is $2 extra.”"], a: 1, w: "Core rule: unless a sticker says otherwise, the price tag covers it all." },
+    { face: "neutral", line: "How long will a standard latex balloon last?", opts: ["About 2 to 3 days with Hi-Float", "About 2 weeks", "About 12 hours"], a: 0, w: "Standard latex 2 to 3 days, foil 4 to 6 days, confetti about 12 hours." },
+    { face: "smile", line: "I bought my own latex balloons. Can you inflate them?", opts: ["Sure, any balloon!", "Foils only. We can't guarantee the quality of outside latex", "No outside balloons at all, ever"], a: 1, w: "Foils yes, latex no, because we can't guarantee outside latex quality." },
+    { face: "neutral", line: "I'm taking these home. Anything I should know?", opts: ["Keep them in the bag until the party", "Take them out of the bag once home, heat gets trapped inside", "Leave them in the hot car"], a: 1, w: "Heat trapped in the bag can ruin the balloons." },
+    { face: "stressed", line: "Can you top up my latex balloon from yesterday?", opts: ["Yes, any balloon", "Only foils can be topped up", "No top-ups on anything"], a: 1, w: "After one inflation the self-sealing valve may be damaged, so top-ups are foils only." }
+  ]);
+  S("orders", [
+    { face: "neutral", line: "Can I pick up my balloons at 8:30 on Wednesday?", opts: ["“Sure, no problem!”", "“Our earliest weekday pickup is 9:15 am. Would that work?”", "“We don't do weekday pickups.”"], a: 1, w: "Earliest pickups: weekdays 9:15 am, Saturdays 9:00 am, Sundays 11:15 am." },
+    { face: "stressed", line: "I'm ordering balloons over the phone. When do I pay?", opts: ["In full before we inflate", "When you pick up", "Half now, half later"], a: 0, w: "Balloons need full payment before inflation." },
+    { face: "upset", line: "I need to cancel my balloon order.", opts: ["No fee, we refund everything", "A 10% non-refundable fee applies", "A 50% fee applies"], a: 1, w: "Cancellations carry a 10% non-refundable fee." },
+    { face: "neutral", line: "Can you hold these cake supplies until tomorrow? I'll pay then.", opts: ["Yes, for up to 24 hours", "Yes, for a whole week", "No, never"], a: 0, w: "Non-balloon items can be held for a maximum of 24 hours on a phone order." },
+    { face: "smile", line: "What's the earliest I can collect on Sunday?", opts: ["9:00 am", "9:15 am", "11:15 am"], a: 2, w: "Sundays 11:15 am. Weekdays 9:15 am, Saturdays 9:00 am." }
+  ]);
+  S("special", [
+    { face: "smile", line: "Can I get a vinyl put on a standard 30cm latex balloon?", opts: ["Yes, any balloon", "No, vinyl can't go on standard 30cm latex", "Only on Sundays"], a: 1, w: "Vinyl can't be applied to standard 30cm latex." },
+    { face: "stressed", line: "I need vinyls for this afternoon!", opts: ["“Sure, ready in an hour!”", "“Vinyls usually need 24 hours' notice. Let me check same-day with the working manager.”", "“Impossible. Ever.”"], a: 1, w: "Usually 24 hours. For same-day, check with the working manager." },
+    { face: "smile", line: "I'd love a garland for 20 December.", opts: ["Check the date with the manager before taking details", "Take all the details first", "Promise “yes” straight away"], a: 0, w: "Always check the date with the manager first to confirm capacity." },
+    { face: "neutral", line: "I'm returning my arch hire. I paid the $100 bond in cash.", opts: ["Refund the bond by cash, the same method", "Refund the bond to a card", "Keep the bond"], a: 0, w: "Bonds are always refunded by the original payment method." },
+    { face: "neutral", line: "Do you deliver on Sundays?", opts: ["Yes, any time", "No, we don't deliver on Sundays", "Only orders under $40"], a: 1, w: "No Sunday deliveries. Saturday needs a manager check, and delivery orders must be over $40 (apart from garlands)." }
+  ]);
+  S("pos", [
+    { face: "smile", line: "It's my birthday this month. Any perks?", opts: ["We collect birthdays so you get a $10 credit on the day", "A free balloon", "No perks, sorry"], a: 0, w: "We collect birthdays so customers get a $10 birthday credit on the day." },
+    { face: "neutral", line: "I spent $200 today. How many points is that?", opts: ["20 points", "200 points, worth $10", "200 points, worth $100"], a: 1, w: "$1 = 1 point. 200 points = $10, 500 points = $25." },
+    { face: "neutral", line: "I have an ABN. Can I get a business discount?", opts: ["Set it up yourself straight away", "Check with a manager before setting up the account", "Say no"], a: 1, w: "ABN accounts need a manager check. They get 15% off instead of points." },
+    { face: "stressed", line: "I want to pay half in cash and half on my card.", opts: ["Enter the first amount, take it, then do the second payment type", "Say split payments aren't possible", "Put it all on the card"], a: 0, w: "Split payment: enter the amount for the first type, complete it, then repeat." },
+    { face: "neutral", line: "I'd like to pay by card over the phone.", opts: ["Manual card entry (a card fee applies)", "Refuse phone payments", "Use a custom sale"], a: 0, w: "Use manual card entry and enter the card details. A card fee applies." },
+    { face: "stressed", line: "The barcode's gone from this item.", opts: ["Search the POS by name or description first", "Make a custom sale", "Give it to them free"], a: 0, w: "Custom sales hurt inventory accuracy, so search first." }
+  ]);
+  S("refunds", [
+    { face: "neutral", line: "I have my receipt, but not the card I paid with.", opts: ["“No card, no refund.”", "“That's fine, the receipt is what we need.”", "“Come back tomorrow.”"], a: 1, w: "The receipt is required. The card isn't." },
+    { face: "neutral", line: "I paid by card. How do I get my refund?", opts: ["Cash from the till", "Back to the same card", "Store credit only"], a: 1, w: "Refunds always go back to the original payment method." },
+    { face: "stressed", line: "I bought this online. Can you refund it at the register?", opts: ["Yes, at the register", "Online refunds go through Shopify, never the register", "No refunds on online orders"], a: 1, w: "All online refunds go through Shopify." },
+    { face: "stressed", line: "I want to return these inflated balloons.", opts: ["Sure, here's your refund", "Inflated balloons can never be returned", "Only if they're foils"], a: 1, w: "Inflated balloons, perishables, gift cards and sale items can't be returned." },
+    { face: "upset", line: "I opened this tub of buttercream but I don't want it.", opts: ["Refund it, no problem", "Check with the working manager first", "Tell them no, end of story"], a: 1, w: "A broken seal generally means no return, but the manager has the final say." },
+    { face: "neutral", line: "It's been 8 days since I bought this. Can I return it?", opts: ["Our window is 6 days, so let me check with the working manager", "Yes, we take anything back for 30 days", "No, goodbye"], a: 0, w: "6 days from purchase, unused, in original packaging, with receipt. The manager has the final say on exceptions." }
+  ]);
+  S("cakebasics", [
+    { face: "neutral", line: "I've got a 9\" board but you have no 9\" box. Which box?", opts: ["An 8\" box", "A 10\" box, the closest larger", "A 12\" box, whatever"], a: 1, w: "Pick the closest larger box." },
+    { face: "stressed", line: "I'm making a tall, heavy cake. What board?", opts: ["A thin cake card", "A drum board", "Just a paper plate"], a: 1, w: "Drum boards are much thicker and sturdier." },
+    { face: "neutral", line: "What's a perforated compressed board for?", opts: ["Letting a central dowel pass through multiple tiers", "Cutting cakes on", "Holding cupcakes"], a: 0, w: "The pre-cut centre hole lets a dowel pass through the tiers." },
+    { face: "smile", line: "How many cupcakes does 1kg of Buttacake mix make?", opts: ["About 6", "About 24 to 30", "About 100"], a: 1, w: "One 1kg Buttacake mix makes one 8\" x 3\" round, or about 24 to 30 cupcakes." },
+    { face: "neutral", line: "Can I buy a whole pack of 10 boards for the price of one?", opts: ["Yes, scan it once", "No, boards are taken out of the sleeve and sold individually", "Only on Tuesdays"], a: 1, w: "So nobody scans a pack of 10 for the price of one." }
+  ]);
+  S("cakedeco", [
+    { face: "neutral", line: "I'm colouring white chocolate. What should I use?", opts: ["A water-based gel", "Colour Mill (oil-based)", "Water"], a: 1, w: "Water-based gel makes chocolate seize. Oil-based Colour Mill bonds with fats." },
+    { face: "upset", line: "My buttercream looks speckled and won't hold colour.", opts: ["They're probably using a water-based gel. Try Colour Mill", "Add more water", "Whip it for an hour"], a: 0, w: "Water-based gel doesn't bind to butter fat. Suggest Colour Mill." },
+    { face: "smile", line: "I'm making a 3D figure that has to stand up on its own.", opts: ["Fondant", "Modelling paste (gum paste)", "Buttercream"], a: 1, w: "Modelling paste dries much harder than fondant." },
+    { face: "neutral", line: "Do you still stock Sweet Sticks Activator?", opts: ["Point them to Bakers Base", "Say it never existed", "Send them to another shop"], a: 0, w: "Bakers Base is our closest equivalent." },
+    { face: "neutral", line: "I want the letters pressed into my fondant, not raised.", opts: ["A debosser", "An embosser (text stamps)", "A rolling pin"], a: 1, w: "Embossers press in (sunken). Debossers make a raised design." },
+    { face: "neutral", line: "I'm not sure what size edible image to get.", opts: ["17.5cm, our standard size", "5cm", "Any size at all"], a: 0, w: "17.5cm is the default if the customer is unsure." }
+  ]);
+  S("party", [
+    { face: "bigsmile", line: "I'm buying these Spiderman balloons.", opts: ["“We have Spiderman party and cake supplies too. Are you doing a matching party?”", "“That's $12.”", "“Anything else?” (flat)"], a: 0, w: "Theme shoppers plan whole events, so matching suggestions feel helpful." },
+    { face: "neutral", line: "I'll take this party banner.", opts: ["Offer centrepieces", "Offer a cake board", "Offer nothing"], a: 0, w: "Banner ➜ centrepieces." },
+    { face: "stressed", line: "Do you have this exact character plate? It's not on the shelf.", opts: ["“No, sorry.”", "Think outside the box and suggest matching alternatives", "“Try another shop.”"], a: 1, w: "Alternatives keep the sale and help the customer." },
+    { face: "neutral", line: "Is this one suitable for a vegan cake?", opts: ["“Yes, definitely!” (not sure)", "Say you'll check, or ask the working manager", "“I have no idea.”"], a: 1, w: "A quick check beats a wrong answer." },
+    { face: "smile", line: "I need a centrepiece for the table.", opts: ["A number balloon bouquet, a popular party centrepiece", "A cake board", "A pinata stick"], a: 0, w: "Number balloon bouquets make popular centrepieces." }
+  ]);
+  S("difficult", [
+    { face: "angry", line: "This is ridiculous! My order is wrong!", opts: ["“Calm down.”", "Listen first, say sorry it happened, then see what you can do", "“That's not my problem.”"], a: 1, w: "Listening first calms the situation. Then apologise that it happened and look for a fix." },
+    { face: "upset", line: "What do you mean you don't have the Frozen plates?", opts: ["“No, we don't have that.”", "“We're out of that right now, but I can show you what we have.”", "“Not my fault.”"], a: 1, w: "Lead with what you CAN do." },
+    { face: "stressed", line: "I'll pay with Afterpay.", opts: ["“We don't accept Afterpay or Zip, but we take Visa, Mastercard, cash and split payments.”", "“No.”", "“Why would you want that?”"], a: 0, w: "State what we don't take, then list what we do." },
+    { face: "upset", line: "I want my money back for this opened buttercream!", opts: ["Refund immediately", "Check with the working manager, who has the final say", "Refuse flatly"], a: 1, w: "Edible refund requests always go to the manager." },
+    { face: "angry", line: "You're useless! Get me someone else!", opts: ["Argue back", "Stay calm and bring in the working manager", "Walk away"], a: 1, w: "You're never on an island. Escalate for exceptions, money matters, unsure situations or if a customer is abusive." }
+  ]);
+  var inf = M("inflating");
+  if (inf) inf.inflate = [
+    { type: "hold", label: "Test inflate: set to 0.5 and stop at about 70% of full size", secs: 3.2, lo: 0.6, hi: 0.8, showTest: true, w: "Start the test inflate at 0.5 and inflate to roughly 70% of the size you need." },
+    { type: "hold", label: "Now finish it to full size using the sizing template", secs: 2.6, lo: 0.92, hi: 1.08, w: "Using the sizing template, adjust up or down to inflate the rest of the way to full size." },
+    { type: "pick", q: "Your settings added up to 0.5 + 0.5 + 0.4 = 1.4. Tank pressure is NORMAL. What do you program?", o: ["0.7", "1.4", "2.8"], a: 0, w: "Normal pressure: half the total (0.7). Low pressure: the full amount (1.4)." },
+    { type: "pick", q: "Which nozzle do you use for a FOIL balloon?", o: ["The upright nozzle", "The angled nozzle"], a: 0, w: "Foils use the upright nozzle; latex uses the angled nozzle." },
+    { type: "pick", q: "A gender reveal latex balloon with confetti inside. Hi-Float?", o: ["No, the wet gel can make the confetti stick", "Yes, always add Hi-Float"], a: 0, w: "Always add Hi-Float to latex, except for gender reveals." },
+    { type: "hold", label: "The tank is nearly empty and it's moving fast! Fill to full size", secs: 2.0, lo: 0.92, hi: 1.08, w: "Gas flow depends on pressure and what's left in the tank, so adjust through the day." },
+    { type: "pick", q: "How many times do you tie a foil balloon?", o: ["Once", "Twice", "Three times"], a: 2, w: "Foils are tied three times so they stay sealed." },
+    { type: "pick", q: "It's closing time and the tank is off. What about the gas in the line?", o: ["Leave the residual line pressure as it is", "Purge it all out to be safe"], a: 0, w: "Once the tank is closed, do NOT purge the leftover gas. Letting gas out is only for a tank change." }
+  ];
+})();
+
+/* ---- Role-play scenes for every other module ---- */
+(function () {
+  function M(id) { return window.PM_CONTENT.modules.filter(function (m) { return m.id === id; })[0]; }
+  function add(id, sc) { var m = M(id); if (!m) return; (m.scenes = m.scenes || []).push(sc); }
+  var MGR = { name: "Manager", skin: "#d9a577", hair: "#2b2b2b", shirt: "#0f766e" };
+  var BIZ = { name: "Corporate client", skin: "#d9a577", hair: "#1c1c1c", shirt: "#475569" };
+  var DAD = { name: "Birthday dad", skin: "#f1c8a0", hair: "#7a4a21", shirt: "#10b981" };
+  var BAKER = { name: "Home baker", skin: "#c68642", hair: "#1a1109", shirt: "#8b5cf6" };
+  var ANGRY = { name: "Upset customer", skin: "#e9b68c", hair: "#2d1b12", shirt: "#c23b3b" };
+
+  add("upsell", { title: "Helpful, not pushy: the balloon sale", blurb: "Weight, bag, cake board and an upgrade, the Party Mix way.", cust: DAD,
+    parts: [
+      { label: "The missed opportunity", mood: "bad", beats: [
+        { note: "A dad is buying balloons for his son's party." },
+        { who: "cust", face: "smile", say: "Just these 3 balloons thanks!" },
+        { who: "staff", face: "bored", say: "$13.50." },
+        { who: "cust", face: "neutral", say: "Here you go." },
+        { note: "😕 No weight, no transport bag, no cake board. The balloons float off at the car and he has to come back." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { note: "Same dad. Same 3 balloons. Helpful, not pushy." },
+        { who: "staff", face: "smile", say: "Lovely! I'll grab you a balloon weight and a transport bag so they get home safely." },
+        { who: "cust", face: "relieved", say: "Oh, good thinking!" },
+        { who: "staff", face: "smile", fx: "💡", say: "Most people go for the 5-balloon arrangement at $20.50. It makes a much bigger impact on the table." },
+        { who: "cust", face: "bigsmile", say: "Go on then, let's do that!" },
+        { who: "staff", face: "bigsmile", say: "Have you sorted a cake yet? Cake boards and boxes are right there." },
+        { who: "cust", face: "bigsmile", fx: "🎂", say: "Ha! I do need a board. Thanks!" },
+        { note: "😍 A bigger sale, a happy dad, and no second trip. That's helpful, not pushy." }
+      ] }
+    ],
+    tips: ["ALWAYS offer a balloon weight and transport bag with a balloon sale.", "Give a reason: “It makes carrying and serving so much easier.”", "Use the golden line: “Have you sorted [the other obvious thing] yet?”"] });
+
+  add("balloons", { title: "Customer brings their own balloons", blurb: "What we can inflate, what's included, and how long balloons last.", cust: { name: "Customer", skin: "#f3d2b3", hair: "#d8d8d8", shirt: "#f59e0b" },
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { note: "A customer arrives with a bag of her own latex balloons." },
+        { who: "cust", face: "smile", say: "Can you blow these up for me? I bought them online." },
+        { who: "staff", face: "bored", say: "Sure, no worries." },
+        { who: "cust", face: "surprised", say: "Oh! One just burst. And the others look floppy already." },
+        { note: "😬 We can't guarantee outside latex. Now she's blaming the shop." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { note: "Same customer, same bag of balloons." },
+        { who: "staff", face: "smile", say: "Thanks for bringing them in! We can only inflate foils, as we can't guarantee the quality of outside latex." },
+        { who: "cust", face: "neutral", say: "Oh, okay. What if I buy yours?" },
+        { who: "staff", face: "bigsmile", say: "The price on the tag includes the balloon, helium, string and Hi-Float." },
+        { who: "cust", face: "smile", say: "How long will they last?" },
+        { who: "staff", face: "smile", say: "Standard latex lasts 2 to 3 days, foils 4 to 6, and confetti balloons about 12 hours. Take them out of the bag at home, as heat gets trapped." },
+        { who: "cust", face: "bigsmile", fx: "🎈", say: "That's so helpful, thank you!" },
+        { note: "😍 Clear, friendly and confident. She bought ours." }
+      ] }
+    ],
+    tips: ["Foils only for outside balloons. We can't guarantee outside latex.", "The tag price includes the balloon, helium, string and Hi-Float (latex).", "Balloons come out of the bag at home. Heat gets trapped."] });
+
+  add("inflating", { title: "Changing the helium tank", blurb: "Safe steps, and when to stop and ask your manager.", cust: MGR,
+    parts: [
+      { label: "The unsafe way", mood: "bad", beats: [
+        { note: "The helium tank is empty. A manager is watching." },
+        { who: "cust", face: "neutral", say: "Time to change the tank. Remember the steps?" },
+        { who: "staff", face: "bigsmile", say: "Yep! I'll just unscrew the regulator." },
+        { who: "cust", face: "surprised", fx: "⚠️", say: "Hang on! Valve first, then let the gas out!" },
+        { who: "staff", face: "bored", say: "Now it won't screw onto the new tank. I'll just push harder." },
+        { who: "cust", face: "angry", fx: "💢", say: "Never force it! You'll damage the thread." },
+        { note: "⚠️ Skipped steps and forced threads are how tanks and regulators get damaged." }
+      ] },
+      { label: "The safe way", mood: "good", beats: [
+        { note: "Same tank change, done properly." },
+        { who: "staff", face: "smile", say: "First I close the valve on the empty tank, then let the remaining gas out of the regulator." },
+        { who: "cust", face: "smile", say: "Good. And then?" },
+        { who: "staff", face: "smile", say: "I unscrew the regulator and check the new tank for moisture. If it's wet, I dry it with paper." },
+        { who: "staff", face: "neutral", other: "smile", say: "It won't go on easily, so I'm stopping. It shouldn't need force. Can you check it with me?" },
+        { who: "cust", face: "bigsmile", fx: "👍", say: "Perfect call. That's exactly what to do." },
+        { note: "✅ Letting gas out is only for a tank change. At closing, leave the line pressurised." }
+      ] }
+    ],
+    tips: ["Close the valve, then let the remaining gas out before unscrewing the regulator.", "The regulator should screw on WITHOUT force. Stop and ask a manager.", "Letting gas out is only for a tank change, never at closing time."] });
+
+  add("orders", { title: "Taking a phone order for balloons", blurb: "Payment, POS note, receipts and the 90-minute rule.", cust: { name: "Phone customer", skin: "#e9b68c", hair: "#2d1b12", shirt: "#ff6f91" },
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { note: "A customer rings to order balloons for Wednesday." },
+        { who: "cust", face: "smile", say: "I'd like 10 balloons picked up Wednesday at 11am, please." },
+        { who: "staff", face: "bored", say: "Sure. You can pay when you pick up." },
+        { note: "😬 No full payment, no date, day and time in the POS note, one receipt only. On Wednesday nobody knows when to start inflating." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { note: "Same call, done properly." },
+        { who: "cust", face: "smile", say: "I'd like 10 balloons picked up Wednesday at 11am, please." },
+        { who: "staff", face: "smile", say: "Lovely! Balloons need full payment before we inflate. Can I take your card details?" },
+        { who: "cust", face: "neutral", say: "Of course." },
+        { who: "staff", face: "smile", fx: "📝", say: "I'll put the date, day and time in the POS note, and print 2 receipts: one for you, one stapled to the back of the order form." },
+        { who: "staff", face: "bigsmile", say: "We'll start inflating at 9:30 for your 11:00 pickup." },
+        { who: "cust", face: "bigsmile", say: "Brilliant, thank you!" },
+        { note: "✅ Paid in full, clearly noted, and ready on time." }
+      ] }
+    ],
+    tips: ["Balloon orders are paid in FULL before we inflate.", "POS note: date, day of the week AND time. Print 2 receipts.", "Start inflating 90 minutes before pickup (11:00 pickup = 9:30 start)."] });
+
+  add("special", { title: "Returning a hire bond", blurb: "Refund the bond the same way it was paid.", cust: BIZ,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { note: "A customer returns the arch hire. She paid the $100 bond in cash." },
+        { who: "cust", face: "smile", say: "All returned and in good condition!" },
+        { who: "staff", face: "bored", say: "Great, I'll refund your bond to a card." },
+        { who: "cust", face: "surprised", say: "But I paid cash? I don't have the card here." },
+        { note: "😕 Bonds must go back the same way they were paid. Now it's messy." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { note: "Same return." },
+        { who: "staff", face: "smile", say: "Thanks for bringing it back! Let me check it over." },
+        { who: "staff", face: "smile", say: "All good! You paid your $100 bond in cash, so I'll refund it in cash, the same method." },
+        { who: "cust", face: "bigsmile", fx: "💵", say: "Perfect, thank you!" },
+        { note: "✅ Bonds are ALWAYS refunded by the original payment method." }
+      ] }
+    ],
+    tips: ["Refund the bond by the SAME method it was paid.", "Check the item over before refunding.", "Hire diary: check the date plus 2 days before and 2 days after."] });
+  add("special", { title: "Garland order: check the date first", blurb: "The first thing to do with any garland request.", cust: { name: "Party planner", skin: "#f1c8a0", hair: "#7a4a21", shirt: "#ff6f91" },
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { who: "cust", face: "bigsmile", say: "I'd love a garland for 20 December!" },
+        { who: "staff", face: "bigsmile", say: "Yes! Let me take all your details." },
+        { who: "staff", face: "stressed", other: "smile", say: "Oh no... the manager says we're already full that day." },
+        { who: "cust", face: "upset", say: "But you said yes!" },
+        { note: "😞 Details were taken before the date was checked, and now we have to cancel." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "bigsmile", say: "I'd love a garland for 20 December!" },
+        { who: "staff", face: "smile", fx: "📅", say: "Love it! Let me just check the date with the manager first to confirm we have capacity." },
+        { who: "staff", face: "bigsmile", say: "Great news, we can do it! Would you like a hire arch or circle mesh to go with it?" },
+        { who: "cust", face: "bigsmile", say: "Ooh yes please!" },
+        { note: "✅ Date checked first, then a helpful upsell: meshes are the ideal frames to tie garlands to." }
+      ] }
+    ],
+    tips: ["FIRST check the date with the manager, before taking any details.", "Suggest hire arch or circle meshes with garlands.", "No Sunday delivery. Saturday needs a manager check."] });
+
+  add("pos", { title: "A customer with an ABN", blurb: "Check with a manager first. ABN means 15% off, not points.", cust: BIZ,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { who: "cust", face: "neutral", say: "I have an ABN. Can I get a business discount?" },
+        { who: "staff", face: "bigsmile", say: "Sure! I'll set up your account right now." },
+        { note: "😬 Setting up or changing an ABN account without a manager check, with no tags added. The discount won't apply properly." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "neutral", say: "I have an ABN. Can I get a business discount?" },
+        { who: "staff", face: "smile", fx: "🧾", say: "Absolutely! I'll check with a manager first to set up your ABN account." },
+        { who: "cust", face: "neutral", say: "Do I earn loyalty points too?" },
+        { who: "staff", face: "smile", say: "ABN accounts get an upfront 15% off instead of points. A supervisor or manager adds the ABN tags." },
+        { who: "cust", face: "smile", say: "Great, thanks." },
+        { note: "✅ Manager check first, and the customer knows exactly what they get." }
+      ] }
+    ],
+    tips: ["Check with a manager BEFORE setting up or changing an ABN account.", "ABN = 15% off upfront. No loyalty points.", "A supervisor or manager adds the ABN tags."] });
+
+  add("refunds", { title: "The opened tub of buttercream", blurb: "Edible refunds always go to the working manager.", cust: ANGRY,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { who: "cust", face: "neutral", say: "I opened this buttercream but I don't want it. Refund please." },
+        { who: "staff", face: "bored", say: "Yep, sure." },
+        { who: "staff", face: "stressed", say: "Oh... a broken seal usually means no return. I should have asked." },
+        { note: "😬 Edible items with a broken seal need the working manager's decision. You gave away a yes you couldn't give." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "neutral", say: "I opened this buttercream but I don't want it. Refund please." },
+        { who: "staff", face: "smile", say: "Thanks for coming in. A broken seal can be tricky, so let me check with the working manager for you." },
+        { who: "cust", face: "relieved", say: "Okay, thank you." },
+        { who: "staff", face: "smile", fx: "🙋", say: "The manager has the final say. If they approve it, the refund goes back to the same card you paid with." },
+        { note: "✅ Calm, honest and no promises you can't keep." }
+      ] }
+    ],
+    tips: ["Opened edibles: check with the working manager. They have the final say.", "Refunds go back to the ORIGINAL payment method.", "Never returnable: inflated balloons, perishables, gift cards and sale items."] });
+
+  add("cakebasics", { title: "Picking the right board and box", blurb: "Drum boards, dowels and the closest larger box.", cust: BAKER,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { who: "cust", face: "stressed", say: "I'm making a tall, heavy 3-tier cake. I've got a 9\" board." },
+        { who: "staff", face: "bored", say: "Any thin cake card will do." },
+        { who: "cust", face: "surprised", say: "And a box? You don't have a 9\"." },
+        { who: "staff", face: "bored", say: "Just grab a small one." },
+        { note: "😬 A thin card will bend under a heavy cake, and a small box won't fit." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "stressed", say: "I'm making a tall, heavy 3-tier cake. I've got a 9\" board." },
+        { who: "staff", face: "smile", say: "For a tall, heavy cake use a drum board. They're much thicker and sturdier." },
+        { who: "staff", face: "smile", fx: "💡", say: "For the tiers, a perforated compressed board lets a central dowel pass through." },
+        { who: "cust", face: "neutral", say: "And a box? You don't have a 9\"." },
+        { who: "staff", face: "bigsmile", say: "No problem. Take the closest larger one, a 10\" box." },
+        { who: "cust", face: "bigsmile", say: "Brilliant, you've saved my cake!" },
+        { note: "✅ Right board, right box, happy baker." }
+      ] }
+    ],
+    tips: ["Tall or heavy cake? Drum board.", "Perforated compressed board: a central dowel passes through multiple tiers.", "No matching box? Choose the closest LARGER size."] });
+
+  add("cakedeco", { title: "The speckled buttercream", blurb: "Gel vs oil colouring, and what to recommend.", cust: BAKER,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { who: "cust", face: "upset", say: "My buttercream looks speckled and won't hold the colour!" },
+        { who: "staff", face: "bored", say: "Just add more colour." },
+        { who: "cust", face: "angry", say: "I added loads. It's worse!" },
+        { note: "😞 Water-based gel doesn't bind to butter fat. More colour won't fix it." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "upset", say: "My buttercream looks speckled and won't hold the colour!" },
+        { who: "staff", face: "smile", fx: "🔍", say: "Are you using a water-based gel? That doesn't bind to butter fat." },
+        { who: "cust", face: "surprised", say: "I think I am!" },
+        { who: "staff", face: "bigsmile", say: "Try Colour Mill. It's oil-based, so it bonds with fats. It's great for chocolate too." },
+        { who: "cust", face: "bigsmile", fx: "🎨", say: "That makes sense. I'll take it!" },
+        { note: "✅ Diagnosed the cause and recommended the right product." }
+      ] }
+    ],
+    tips: ["Buttercream or chocolate: oil-based Colour Mill. Water-based gel makes chocolate seize.", "3D figures: modelling paste (gum paste), not fondant.", "Letters pressed IN = embosser. Raised = debosser."] });
+
+  add("party", { title: "Sell the whole party", blurb: "Matching add-ons, centrepieces and what to do when you're out.", cust: DAD,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { who: "cust", face: "bigsmile", say: "I'm getting these Spiderman balloons for my son!" },
+        { who: "staff", face: "bored", say: "That's $12." },
+        { who: "cust", face: "neutral", say: "Do you have the matching plates?" },
+        { who: "staff", face: "bored", say: "No." },
+        { note: "😕 A theme shopper walks out with only balloons, and goes elsewhere for the rest." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "bigsmile", say: "I'm getting these Spiderman balloons for my son!" },
+        { who: "staff", face: "bigsmile", fx: "🕷️", say: "How fun! We have Spiderman party and cake supplies too. Are you doing a matching party?" },
+        { who: "cust", face: "smile", say: "Yes! Do you have a banner?" },
+        { who: "staff", face: "smile", say: "Yes! And centrepieces go perfectly with a banner. A number balloon bouquet is a popular one." },
+        { who: "cust", face: "neutral", say: "Do you have these exact plates?" },
+        { who: "staff", face: "smile", say: "Not that exact one, but let me show you some matching alternatives." },
+        { note: "✅ Whole party sold, and an alternative offered instead of a flat “no”." }
+      ] }
+    ],
+    tips: ["Theme shoppers plan whole events. Ask about a matching party.", "Banner ➜ centrepieces. Number balloon bouquets are popular.", "Don't know? Say you'll check, or ask the working manager."] });
+
+  add("day", { title: "Closing the shop safely", blurb: "The helium tank, the machine and the next-day plan.", cust: MGR,
+    parts: [
+      { label: "The unsafe way", mood: "bad", beats: [
+        { note: "Closing time. The manager is checking in." },
+        { who: "cust", face: "neutral", say: "Tank off? What about the gas in the line?" },
+        { who: "staff", face: "bigsmile", say: "Yep, and I let the leftover gas out of the line to be safe." },
+        { who: "cust", face: "angry", fx: "💢", say: "No! Once the tank is closed, never purge the line!" },
+        { note: "⚠️ Letting gas out is only for a tank change. At close, leave the residual line pressure as it is." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { who: "cust", face: "neutral", say: "Walk me through closing." },
+        { who: "staff", face: "smile", say: "Main valve on the helium tank completely off, then power down the balloon machine. I leave the line pressure alone." },
+        { who: "staff", face: "smile", say: "Then I wipe down and sanitise the machine, and clean and refill the Hi-Float bottle." },
+        { who: "cust", face: "smile", say: "Busy day tomorrow?" },
+        { who: "staff", face: "bigsmile", fx: "✨", say: "Yes! I'll pre-inflate foils only tonight, since they hold gas much longer than latex." },
+        { who: "cust", face: "bigsmile", say: "Spot on. And it's Tuesday, so the big bins go to the curb." },
+        { note: "✅ Safe, clean and ready for tomorrow." }
+      ] }
+    ],
+    tips: ["Close the tank, power down the machine, and NEVER purge the line at closing.", "Pre-inflate FOILS only the night before.", "Balloon order due at 12:00? Start inflating at 10:30 (90 minutes before)."] });
+
+  add("difficult", { title: "The upset customer", blurb: "Listen, say sorry it happened, and lead with what you CAN do.", cust: ANGRY,
+    parts: [
+      { label: "The wrong way", mood: "bad", beats: [
+        { note: "A customer storms in. The Frozen plates she wanted are sold out." },
+        { who: "cust", face: "angry", fx: "💢", say: "This is ridiculous! You told me you'd have the Frozen plates!" },
+        { who: "staff", face: "bored", say: "No, we don't have that." },
+        { who: "cust", face: "angry", say: "That's it?! Useless!" },
+        { who: "staff", face: "angry", say: "It's not my fault." },
+        { note: "😡 It escalates. She leaves furious and tells her friends." }
+      ] },
+      { label: "The Party Mix way", mood: "good", beats: [
+        { note: "Same customer. Same out-of-stock plates." },
+        { who: "cust", face: "angry", fx: "💢", say: "This is ridiculous! You told me you'd have the Frozen plates!" },
+        { who: "staff", face: "smile", fx: "👂", say: "I'm really sorry about that. Let me hear what happened." },
+        { who: "cust", face: "upset", say: "I came all this way for them!" },
+        { who: "staff", face: "smile", say: "We're out of those right now, but I can show you what we have. There are some great matching options." },
+        { who: "cust", face: "relieved", say: "Okay... show me." },
+        { who: "staff", face: "bigsmile", say: "And if you'd like, I can check whether we can order them in." },
+        { note: "✅ Listen, apologise, lead with what you CAN do. And if she became abusive, you'd bring in the working manager." }
+      ] }
+    ],
+    tips: ["Listen first. Then say sorry it happened and see what you can do.", "Replace “No, we don't have that” with “We're out of that right now, but I can show you what we have.”", "Bring in the working manager for exceptions, money matters, unsure situations or abuse."] });
+})();
